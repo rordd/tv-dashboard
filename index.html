@@ -684,37 +684,17 @@
             </div>
             
             <div class="setting-group">
-                <label class="setting-label">연결 모드</label>
-                <select class="setting-select" id="modeSelect">
-                    <option value="openclaw">🤠 이놈아 (OpenClaw Gateway)</option>
-                    <option value="openai">🤖 OpenAI API (별도 AI)</option>
+                <label class="setting-label">OpenAI API Key</label>
+                <input type="password" class="setting-input" id="apiKeyInput" placeholder="sk-...">
+            </div>
+            
+            <div class="setting-group">
+                <label class="setting-label">AI 모델</label>
+                <select class="setting-select" id="modelSelect">
+                    <option value="gpt-4">GPT-4</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    <option value="gpt-4-turbo">GPT-4 Turbo</option>
                 </select>
-            </div>
-
-            <div id="openclawSettings">
-                <div class="setting-group">
-                    <label class="setting-label">Gateway URL</label>
-                    <input type="text" class="setting-input" id="gatewayUrlInput" placeholder="ws://127.0.0.1:18789">
-                </div>
-                <div class="setting-group">
-                    <label class="setting-label">Auth Token</label>
-                    <input type="password" class="setting-input" id="gatewayTokenInput" placeholder="Gateway 인증 토큰">
-                </div>
-            </div>
-
-            <div id="openaiSettings" style="display:none;">
-                <div class="setting-group">
-                    <label class="setting-label">OpenAI API Key</label>
-                    <input type="password" class="setting-input" id="apiKeyInput" placeholder="sk-...">
-                </div>
-                <div class="setting-group">
-                    <label class="setting-label">AI 모델</label>
-                    <select class="setting-select" id="modelSelect">
-                        <option value="gpt-4">GPT-4</option>
-                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                    </select>
-                </div>
             </div>
             
             <div class="setting-group">
@@ -734,20 +714,14 @@
     <script>
         // 전역 변수
         let settings = {
-            mode: localStorage.getItem('chat_mode') || 'openclaw',
             apiKey: localStorage.getItem('openai_api_key') || '',
             model: localStorage.getItem('ai_model') || 'gpt-3.5-turbo',
-            gatewayUrl: localStorage.getItem('gateway_url') || 'ws://127.0.0.1:18789',
-            gatewayToken: localStorage.getItem('gateway_token') || '',
             latitude: parseFloat(localStorage.getItem('latitude')) || 37.55,
             longitude: parseFloat(localStorage.getItem('longitude')) || 126.85
         };
 
         let chatHistory = [];
         let newsData = [];
-        let ocSocket = null;
-        let ocConnected = false;
-        let ocPendingResolve = null;
 
         // DOM 요소들
         const timeDisplay = document.getElementById('timeDisplay');
@@ -997,94 +971,8 @@
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
 
-        // OpenClaw Gateway WebSocket 연결
-        function connectOpenClaw() {
-            if (ocSocket && ocSocket.readyState <= 1) return;
-            
-            const url = settings.gatewayUrl;
-            const params = settings.gatewayToken ? 
-                JSON.stringify({ auth: { token: settings.gatewayToken } }) : '{}';
-            
-            try {
-                ocSocket = new WebSocket(url);
-                let fullResponse = '';
-                
-                ocSocket.onopen = () => {
-                    ocConnected = true;
-                    // 인증
-                    ocSocket.send(JSON.stringify({
-                        type: 'connect',
-                        params: { auth: { token: settings.gatewayToken } }
-                    }));
-                    showStatus('🤠 이놈아 연결됨!', 'success');
-                };
-                
-                ocSocket.onmessage = (event) => {
-                    try {
-                        const msg = JSON.parse(event.data);
-                        
-                        if (msg.type === 'chat' && msg.data) {
-                            const data = msg.data;
-                            if (data.delta) {
-                                fullResponse += data.delta;
-                            }
-                            if (data.done || data.status === 'done') {
-                                typingIndicator.style.display = 'none';
-                                if (fullResponse) {
-                                    addMessage(fullResponse, 'assistant');
-                                    fullResponse = '';
-                                }
-                                sendBtn.disabled = false;
-                                sendBtn.textContent = '전송';
-                            }
-                        }
-                        
-                        if (msg.type === 'chat.ack' || msg.type === 'chat.send') {
-                            // send acknowledged
-                        }
-
-                        if (msg.type === 'error') {
-                            typingIndicator.style.display = 'none';
-                            addMessage('오류: ' + (msg.data?.message || '알 수 없는 오류'), 'assistant');
-                            sendBtn.disabled = false;
-                            sendBtn.textContent = '전송';
-                        }
-                    } catch(e) {}
-                };
-                
-                ocSocket.onclose = () => {
-                    ocConnected = false;
-                    showStatus('연결 끊김. 재연결 중...', 'error');
-                    setTimeout(connectOpenClaw, 5000);
-                };
-                
-                ocSocket.onerror = () => {
-                    ocConnected = false;
-                };
-            } catch(e) {
-                showStatus('Gateway 연결 실패: ' + e.message, 'error');
-            }
-        }
-
-        // OpenClaw로 메시지 보내기
-        function sendToOpenClaw(message) {
-            if (!ocSocket || ocSocket.readyState !== 1) {
-                addMessage('Gateway에 연결되지 않았습니다. 설정을 확인해주세요.', 'assistant');
-                return;
-            }
-            
-            typingIndicator.style.display = 'block';
-            sendBtn.disabled = true;
-            sendBtn.textContent = '전송 중...';
-            
-            ocSocket.send(JSON.stringify({
-                type: 'chat.send',
-                data: { message: message }
-            }));
-        }
-
-        // OpenAI API로 메시지 보내기
-        async function sendToOpenAI(message) {
+        // AI 채팅 응답
+        async function sendChatMessage(message) {
             if (!settings.apiKey) {
                 addMessage('설정에서 OpenAI API 키를 입력해주세요.', 'assistant');
                 return;
@@ -1106,8 +994,11 @@
                     body: JSON.stringify({
                         model: settings.model,
                         messages: [
-                            { role: 'system', content: '당신은 친근하고 도움이 되는 webOS Agent입니다. 한국어로 대화하며, 사용자의 질문에 정확하고 유용한 답변을 제공합니다.' },
-                            ...chatHistory.slice(-10)
+                            {
+                                role: 'system',
+                                content: '당신은 친근하고 도움이 되는 webOS Agent입니다. 한국어로 대화하며, 사용자의 질문에 정확하고 유용한 답변을 제공합니다.'
+                            },
+                            ...chatHistory.slice(-10) // 최근 10개 메시지만 유지
                         ],
                         max_tokens: 1000,
                         temperature: 0.7
@@ -1115,28 +1006,24 @@
                 });
 
                 const data = await response.json();
-                if (data.error) throw new Error(data.error.message);
+                
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
 
                 const aiResponse = data.choices[0].message.content;
                 chatHistory.push({ role: 'assistant', content: aiResponse });
                 
                 typingIndicator.style.display = 'none';
                 addMessage(aiResponse, 'assistant');
+
             } catch (error) {
+                console.error('채팅 오류:', error);
                 typingIndicator.style.display = 'none';
-                addMessage('오류가 발생했습니다. API 키를 확인해주세요.', 'assistant');
+                addMessage('죄송합니다. 오류가 발생했습니다. API 키를 확인하거나 잠시 후 다시 시도해주세요.', 'assistant');
             } finally {
                 sendBtn.disabled = false;
                 sendBtn.textContent = '전송';
-            }
-        }
-
-        // AI 채팅 응답 (모드에 따라 분기)
-        async function sendChatMessage(message) {
-            if (settings.mode === 'openclaw') {
-                sendToOpenClaw(message);
-            } else {
-                await sendToOpenAI(message);
             }
         }
 
@@ -1150,45 +1037,21 @@
             }, 3000);
         }
 
-        // 설정 모드 토글
-        const modeSelect = document.getElementById('modeSelect');
-        const openclawSettings = document.getElementById('openclawSettings');
-        const openaiSettings = document.getElementById('openaiSettings');
-        const gatewayUrlInput = document.getElementById('gatewayUrlInput');
-        const gatewayTokenInput = document.getElementById('gatewayTokenInput');
-
-        modeSelect.addEventListener('change', () => {
-            const mode = modeSelect.value;
-            openclawSettings.style.display = mode === 'openclaw' ? 'block' : 'none';
-            openaiSettings.style.display = mode === 'openai' ? 'block' : 'none';
-        });
-
         // 설정 로드
         function loadSettings() {
-            modeSelect.value = settings.mode;
-            gatewayUrlInput.value = settings.gatewayUrl;
-            gatewayTokenInput.value = settings.gatewayToken;
             apiKeyInput.value = settings.apiKey;
             modelSelect.value = settings.model;
             latitudeInput.value = settings.latitude;
             longitudeInput.value = settings.longitude;
-            openclawSettings.style.display = settings.mode === 'openclaw' ? 'block' : 'none';
-            openaiSettings.style.display = settings.mode === 'openai' ? 'block' : 'none';
         }
 
         // 설정 저장
         function saveSettings() {
-            settings.mode = modeSelect.value;
-            settings.gatewayUrl = gatewayUrlInput.value.trim() || 'ws://127.0.0.1:18789';
-            settings.gatewayToken = gatewayTokenInput.value.trim();
             settings.apiKey = apiKeyInput.value.trim();
             settings.model = modelSelect.value;
             settings.latitude = parseFloat(latitudeInput.value) || 37.55;
             settings.longitude = parseFloat(longitudeInput.value) || 126.85;
 
-            localStorage.setItem('chat_mode', settings.mode);
-            localStorage.setItem('gateway_url', settings.gatewayUrl);
-            localStorage.setItem('gateway_token', settings.gatewayToken);
             localStorage.setItem('openai_api_key', settings.apiKey);
             localStorage.setItem('ai_model', settings.model);
             localStorage.setItem('latitude', settings.latitude.toString());
@@ -1197,12 +1060,8 @@
             showStatus('설정이 저장되었습니다', 'success');
             settingsPanel.style.display = 'none';
             
+            // 위치가 변경되었으면 날씨 업데이트
             updateWeather();
-            
-            // OpenClaw 모드면 연결
-            if (settings.mode === 'openclaw' && settings.gatewayToken) {
-                connectOpenClaw();
-            }
         }
 
         // 이벤트 리스너
@@ -1261,14 +1120,10 @@
             updateWeather();
             generateAINews();
             
+            // 주기적 업데이트
             setInterval(updateClock, 1000);
-            setInterval(updateWeather, 10 * 60 * 1000);
-            setInterval(generateAINews, 30 * 60 * 1000);
-            
-            // OpenClaw 모드면 자동 연결
-            if (settings.mode === 'openclaw' && settings.gatewayToken) {
-                connectOpenClaw();
-            }
+            setInterval(updateWeather, 10 * 60 * 1000); // 10분마다
+            setInterval(generateAINews, 30 * 60 * 1000); // 30분마다
             
             showStatus('TV 대시보드가 준비되었습니다', 'success');
         }
