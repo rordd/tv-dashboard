@@ -27,6 +27,42 @@
             padding: 20px;
         }
 
+        /* 모바일 세로 모드: 위젯 위 + 채팅 아래 */
+        @media (max-width: 768px) and (orientation: portrait) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+                gap: 10px;
+                padding: 10px;
+            }
+            .widget-panel {
+                max-height: 45vh;
+            }
+            .clock-widget .time { font-size: 36px !important; }
+            .clock-widget .date { font-size: 16px !important; }
+            .chat-panel { padding: 15px !important; }
+            .chat-title { font-size: 24px !important; }
+            .message-content { font-size: 16px !important; }
+            .chat-input { font-size: 16px !important; }
+        }
+
+        /* 모바일 가로 모드: TV와 동일 레이아웃 */
+        @media (max-width: 950px) and (orientation: landscape) {
+            .container {
+                grid-template-columns: 280px 1fr;
+                gap: 10px;
+                padding: 10px;
+            }
+            .clock-widget .time { font-size: 32px !important; }
+            .clock-widget .date { font-size: 14px !important; }
+            .widget { padding: 15px !important; }
+            .widget h3 { font-size: 16px !important; }
+            .weather-main .temperature { font-size: 28px !important; }
+            .chat-panel { padding: 15px !important; }
+            .chat-title { font-size: 22px !important; }
+            .message-content { font-size: 15px !important; }
+        }
+
         .widget-panel {
             display: flex;
             flex-direction: column;
